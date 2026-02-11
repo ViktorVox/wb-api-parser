@@ -14,13 +14,10 @@ return new class extends Migration
         Schema::create('stocks', function (Blueprint $table) {
             $table->id();
 
-            // Основные данные
             $table->date('date');
             $table->string('warehouse_name');
             $table->bigInteger('nm_id');
             $table->integer('quantity');
-
-            // Nullable поля
             $table->date('last_change_date')->nullable();
             $table->string('supplier_article')->nullable();
             $table->string('tech_size')->nullable();

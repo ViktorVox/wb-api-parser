@@ -4,35 +4,36 @@ namespace App\Console\Commands;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Console\Command;
-use App\Models\Stock;
+use App\Models\Order;
 
-class SyncStocksCommand extends Command
+class SyncOrdersCommand extends Command
 {
     /**
      * The name and signature of the console command.
      *
      * @var string
      */
-    protected $signature = "api:sync-stocks";
+    protected $signature = 'api:sync-orders';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = "Fetch stocks from API and save to database";
+    protected $description = 'Fetch stocks from API and save to database';
 
     /**
      * Execute the console command.
      */
     public function handle()
     {
-        $this->info("Начинаем загрузку Складов ...");
+        $this->info("Начинаем загрузку Заказов ...");
 
-        $url = env('WB_API_URL') . '/stocks';
+        $url = env('WB_API_URL') . '/orders';
         $key = env('WB_API_KEY');
         $page = 1;
-        $dateFrom = now()->toDateString();
+        $dateFrom = '2026-02-10';
+        $dateTo = now()->toDateString();
 
         // Цикл do-while, так как не знаем общее кол-во страниц
         do {
@@ -51,6 +52,7 @@ class SyncStocksCommand extends Command
                 ->withoutVerifying()
                 ->get($url, [
                     "dateFrom" => $dateFrom,
+                    "dateTo"   => $dateTo,
                     "page"     => $page,
                     "key"      => $key,
                     "limit"    => 100,
@@ -80,29 +82,29 @@ class SyncStocksCommand extends Command
 
             // Раскладываем по полкам
             foreach ($data as $item) {
-                Stock::updateOrCreate(
+                Order::updateOrCreate(
                     [
-                        "date" => $item["date"],
-                        "warehouse_name" => $item["warehouse_name"],
-                        "nm_id" => $item["nm_id"],
+                        // Уникальность заказа обычно определяется его ID и номером
+                        "odid" => $item["odid"],
+                        "g_number" => $item["g_number"],
                     ],
                     [
+                        "date" => $item["date"],
                         "last_change_date" => $item["last_change_date"],
                         "supplier_article" => $item["supplier_article"],
                         "tech_size" => $item["tech_size"],
                         "barcode" => $item["barcode"],
-                        "quantity" => $item["quantity"],
-                        "is_supply" => $item["is_supply"],
-                        "is_realization" => $item["is_realization"],
-                        "quantity_full" => $item["quantity_full"],
-                        "in_way_to_client" => $item["in_way_to_client"],
-                        "in_way_from_client" => $item["in_way_from_client"],
+                        "total_price" => $item["total_price"],
+                        "discount_percent" => $item["discount_percent"],
+                        "warehouse_name" => $item["warehouse_name"],
+                        "oblast" => $item["oblast"],
+                        "income_id" => $item["income_id"],
+                        "nm_id" => $item["nm_id"],
                         "subject" => $item["subject"],
                         "category" => $item["category"],
                         "brand" => $item["brand"],
-                        "sc_code" => $item["sc_code"],
-                        "price" => $item["price"],
-                        "discount" => $item["discount"],
+                        "is_cancel" => $item["is_cancel"],
+                        "cancel_dt" => $item["cancel_dt"],
                     ]
                 );
             }
@@ -113,6 +115,6 @@ class SyncStocksCommand extends Command
 
         } while ($page <= $lastPage);
 
-        $this->info('Склады успешно синхронизированы!');
+        $this->info('Заказы успешно синхронизированы!');
     }
 }
