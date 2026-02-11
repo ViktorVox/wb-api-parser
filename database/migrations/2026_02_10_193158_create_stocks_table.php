@@ -17,7 +17,7 @@ return new class extends Migration
             // Основные данные
             $table->date('date');
             $table->string('warehouse_name');
-            $table->unsignedBigInteger('nm_id');
+            $table->bigInteger('nm_id');
             $table->integer('quantity');
 
             // Nullable поля
