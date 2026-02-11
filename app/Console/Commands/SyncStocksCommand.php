@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Support\Facades\Http;
+use \Illuminate\Support\Facades\DB;
 use Illuminate\Console\Command;
 use App\Models\Stock;
 
@@ -79,33 +80,51 @@ class SyncStocksCommand extends Command
             }
 
             // Раскладываем по полкам
+            $batch = [];
             foreach ($data as $item) {
-                Stock::updateOrCreate(
-                    [
-                        "date" => $item["date"],
-                        "warehouse_name" => $item["warehouse_name"],
-                        "nm_id" => $item["nm_id"],
-                    ],
-                    [
-                        "last_change_date" => $item["last_change_date"],
-                        "supplier_article" => $item["supplier_article"],
-                        "tech_size" => $item["tech_size"],
-                        "barcode" => $item["barcode"],
-                        "quantity" => $item["quantity"],
-                        "is_supply" => $item["is_supply"],
-                        "is_realization" => $item["is_realization"],
-                        "quantity_full" => $item["quantity_full"],
-                        "in_way_to_client" => $item["in_way_to_client"],
-                        "in_way_from_client" => $item["in_way_from_client"],
-                        "subject" => $item["subject"],
-                        "category" => $item["category"],
-                        "brand" => $item["brand"],
-                        "sc_code" => $item["sc_code"],
-                        "price" => $item["price"],
-                        "discount" => $item["discount"],
-                    ]
-                );
+                $batch[] = [
+                    "date" => $item["date"],
+                    "warehouse_name" => $item["warehouse_name"],
+                    "nm_id" => $item["nm_id"],
+                    "last_change_date" => $item["last_change_date"],
+                    "supplier_article" => $item["supplier_article"],
+                    "tech_size" => $item["tech_size"],
+                    "barcode" => $item["barcode"],
+                    "quantity" => $item["quantity"],
+                    "is_supply" => $item["is_supply"],
+                    "is_realization" => $item["is_realization"],
+                    "quantity_full" => $item["quantity_full"],
+                    "in_way_to_client" => $item["in_way_to_client"],
+                    "in_way_from_client" => $item["in_way_from_client"],
+                    "subject" => $item["subject"],
+                    "category" => $item["category"],
+                    "brand" => $item["brand"],
+                    "sc_code" => $item["sc_code"],
+                    "price" => $item["price"],
+                    "discount" => $item["discount"],
+                ];
             }
+
+            if (!empty($batch)) {
+                // Пингуем базу и жестко сбрасываем старое соединение
+                DB::purge();
+                DB::reconnect();
+
+                // Дробим партию на коробки по 10 штук
+                $chunks = array_chunk($batch, 10);
+
+                foreach ($chunks as $chunk) {
+                    Stock::upsert(
+                        $chunk,
+                        ['date', 'warehouse_name', 'nm_id'], // Уникальный составной ключ
+                        ['last_change_date', 'supplier_article', 'tech_size', 'barcode', 'quantity', 'is_supply', 'is_realization', 'quantity_full', 'in_way_to_client', 'in_way_from_client', 'subject', 'category', 'brand', 'sc_code', 'price', 'discount']
+                    );
+                }
+
+                $this->output->write('End');
+            }
+
+            $this->newLine();
 
             // Проверяем, есть ли ещё страницы
             $lastPage = $json["meta"]["last_page"] ?? 1;

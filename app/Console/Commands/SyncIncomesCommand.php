@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Support\Facades\Http;
+use \Illuminate\Support\Facades\DB;
 use Illuminate\Console\Command;
 use App\Models\Income;
 
@@ -77,32 +78,49 @@ class SyncIncomesCommand extends Command
 
             // Проверяем, есть ли вообще данные на этой странице
             if (empty($data)) {
-                 $this->info("Склад пуст или данные закончились.");
+                 $this->info("Доходы пусты или данные закончились.");
                  break;
             }
 
             // Раскладываем по полкам
+            $batch = [];
             foreach ($data as $item) {
-                Income::updateOrCreate(
-                    [
-                        // В одной поставке могут быть разные товары, поэтому ищем по ID поставки + штрихкоду
-                        "income_id" => $item["income_id"],
-                        "barcode" => $item["barcode"],
-                    ],
-                    [
-                        "number" => $item["number"],
-                        "date" => $item["date"],
-                        "last_change_date" => $item["last_change_date"],
-                        "supplier_article" => $item["supplier_article"],
-                        "tech_size" => $item["tech_size"],
-                        "quantity" => $item["quantity"],
-                        "total_price" => $item["total_price"],
-                        "date_close" => $item["date_close"],
-                        "warehouse_name" => $item["warehouse_name"],
-                        "nm_id" => $item["nm_id"],
-                    ]
-                );
+                $batch[] = [
+                    "income_id" => $item["income_id"],
+                    "barcode" => $item["barcode"],
+                    "number" => $item["number"],
+                    "date" => $item["date"],
+                    "last_change_date" => $item["last_change_date"],
+                    "supplier_article" => $item["supplier_article"],
+                    "tech_size" => $item["tech_size"],
+                    "quantity" => $item["quantity"],
+                    "total_price" => $item["total_price"],
+                    "date_close" => $item["date_close"],
+                    "warehouse_name" => $item["warehouse_name"],
+                    "nm_id" => $item["nm_id"],
+                ];
             }
+
+            if (!empty($batch)) {
+                // Пингуем базу и жестко сбрасываем старое соединение
+                DB::purge();
+                DB::reconnect();
+
+                // Дробим партию на коробки по 10 штук
+                $chunks = array_chunk($batch, 10);
+
+                foreach ($chunks as $chunk) {
+                    Income::upsert(
+                        $chunk,
+                        ['income_id', 'barcode'], // Уникальный составной ключ
+                        ['number', 'date', 'last_change_date', 'supplier_article', 'tech_size', 'quantity', 'total_price', 'date_close', 'warehouse_name', 'nm_id']
+                    );
+                }
+
+                $this->output->write('End');
+            }
+
+            $this->newLine();
 
             // Проверяем, есть ли ещё страницы
             $lastPage = $json["meta"]["last_page"] ?? 1;
